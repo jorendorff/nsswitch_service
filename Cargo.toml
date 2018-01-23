@@ -1,0 +1,10 @@
+[package]
+name = "dev-tld-resolver"
+version = "0.1.0"
+authors = ["Jason Orendorff <jason.orendorff@gmail.com>"]
+
+[dependencies]
+libc="*"
+
+[lib]
+crate-type = ["dylib"]
