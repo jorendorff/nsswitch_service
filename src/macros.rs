@@ -3,10 +3,10 @@ use errors::{Error, Result, NETDB_INTERNAL};
 pub use errors::NssStatus;
 use interfaces::{AddressFamily, HostEntry, HostAddressList, Switcheroo};
 use libc::{AF_INET, AF_INET6, in_addr_t, in6_addr };
-pub use libc::{c_char, c_int, hostent};
+pub use libc::{c_char, c_int, c_void, hostent};
 use std::{iter, mem, ptr};
 use std::ffi::CStr;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 
 /// In C, the same type `T*` is used to mean both pointer-to-T and
@@ -145,7 +145,6 @@ pub unsafe fn call_gethostbyname2_r<T: Switcheroo>(
     handle_gethostbyname2_r(lookup_result, result, buffer, buflen, errnop, h_errnop)
 }
 
-
 /// This macro defines a function that implements `gethostbyname2_r` in a way
 /// that NSSwitch can find and use.
 ///
@@ -191,6 +190,65 @@ macro_rules! nssglue_gethostbyname2_r {
     }
 }
 
+#[inline]
+pub unsafe fn call_gethostbyaddr_r<T: Switcheroo>(
+    addr: *const c_void,
+    len: c_int,
+    af: c_int,
+    result: *mut hostent,
+    buffer: *mut c_char,
+    buflen: usize,
+    errnop: *mut c_int,
+    h_errnop: *mut c_int,
+) -> NssStatus {
+    let addr: IpAddr = match af {
+        AF_INET => {
+            if len as usize != mem::size_of::<u32>() {
+                return Error::invalid_args().report_with_host(errnop, h_errnop);
+            }
+            let inaddr: in_addr_t = *(addr as *const u32);
+            IpAddr::from(Ipv4Addr::from(inaddr))
+        }
+        AF_INET6 => {
+            if len as usize != mem::size_of::<[u8; 16]>() {
+                return Error::invalid_args().report_with_host(errnop, h_errnop);
+            }
+            let octets: [u8; 16] = *(addr as *const [u8; 16]);
+            IpAddr::from(Ipv6Addr::from(octets))
+        }
+        _ => return Error::invalid_args().report_with_host(errnop, h_errnop)
+    };
+    let lookup_result = T::gethostbyaddr_r(&addr);
+    handle_gethostbyname2_r(lookup_result, result, buffer, buflen, errnop, h_errnop)
+}
+
+#[macro_export]
+macro_rules! nssglue_gethostbyaddr_r {
+    ($name:ident, $t:ty) => {
+        pub unsafe extern "C" fn $name(
+            addr: *const $crate::macros::c_void,
+            len: $crate::macros::c_int,
+            af: $crate::macros::c_int,
+            result: *mut $crate::macros::hostent,
+            buffer: *mut $crate::macros::c_char,
+            buflen: usize,
+            errnop: *mut $crate::macros::c_int,
+            h_errnop: *mut $crate::macros::c_int,
+        ) -> $crate::macros::NssStatus {
+            $crate::macros::call_gethostbyaddr_r::<$t>(
+                addr,
+                len,
+                af,
+                result,
+                buffer,
+                buflen,
+                errnop,
+                h_errnop
+            )
+        }
+    }
+}
+
 /*
 pub unsafe extern "C" fn _nss_dev_tld_gethostbyname_r(
     name: *const c_char,
@@ -199,20 +257,6 @@ pub unsafe extern "C" fn _nss_dev_tld_gethostbyname_r(
     buflen: usize,
     errnop: *mut c_int,
     h_errnop: *mut c_int,
-) -> nss_status {
-    unimplemented!();
-}
-
-
-pub unsafe extern "C" fn _nss_dev_tld_gethostbyaddr_r(
-    _addr: *const c_void,
-    _len: c_int,
-    _af: c_int,
-    _result: *mut hostent,
-    _buffer: *mut c_char,
-    _buflen: usize,
-    _errnop: *mut c_int,
-    _h_errnop: *mut c_int,
 ) -> nss_status {
     unimplemented!();
 }

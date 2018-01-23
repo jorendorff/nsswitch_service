@@ -8,7 +8,7 @@ pub mod interfaces;
 #[macro_use] pub mod macros;
 
 use std::ffi::CStr;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use interfaces::{AddressFamily, HostAddressList, HostEntry, Switcheroo};
 use errors::Result;
@@ -85,13 +85,29 @@ impl Switcheroo for ExampleResolver {
 
         Ok(None)
     }
+
+    fn gethostbyaddr_r(_addr: &IpAddr) -> Result<Option<HostEntry>> {
+        Ok(None)
+    }
 }
 
 nssglue_gethostbyname2_r!(_nss_example_gethostbyname2_r, ExampleResolver);
+nssglue_gethostbyaddr_r!(_nss_example_gethostbyaddr_r, ExampleResolver);
 
 
 // stuff i want to throw away
 /*
+pub unsafe extern "C" fn _nss_dev_tld_gethostbyname_r(
+    name: *const c_char,
+    result: *mut hostent,
+    buffer: *mut c_char,
+    buflen: usize,
+    errnop: *mut c_int,
+    h_errnop: *mut c_int,
+) -> nss_status {
+    return _nss_dev_tld_gethostbyname2_r(name, AF_INET, result, buffer, buflen, errnop, h_errnop);
+}
+
 unsafe fn dev_tld_fill_hostent(
     name: *const c_char,
     af: c_int,
@@ -120,27 +136,4 @@ unsafe fn dev_tld_fill_hostent(
     nss_status::NSS_STATUS_SUCCESS
 }
 
-pub unsafe extern "C" fn _nss_dev_tld_gethostbyname_r(
-    name: *const c_char,
-    result: *mut hostent,
-    buffer: *mut c_char,
-    buflen: usize,
-    errnop: *mut c_int,
-    h_errnop: *mut c_int,
-) -> nss_status {
-    return _nss_dev_tld_gethostbyname2_r(name, AF_INET, result, buffer, buflen, errnop, h_errnop);
-}
-
-pub unsafe extern "C" fn _nss_dev_tld_gethostbyaddr_r(
-    _addr: *const c_void,
-    _len: c_int,
-    _af: c_int,
-    _result: *mut hostent,
-    _buffer: *mut c_char,
-    _buflen: usize,
-    _errnop: *mut c_int,
-    _h_errnop: *mut c_int,
-) -> nss_status {
-    nss_status::NSS_STATUS_UNAVAIL
-}
 */

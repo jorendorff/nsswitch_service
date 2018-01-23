@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use std::ffi::CStr;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use errors::Result;
 
 pub enum AddressFamily {
@@ -50,5 +50,7 @@ pub trait Switcheroo {
     /// *   `Ok(Some(HostEntry))`, a successful query result.
     ///
     fn gethostbyname2_r(name: &CStr, af: AddressFamily) -> Result<Option<HostEntry>>;
+
+    fn gethostbyaddr_r(addr: &IpAddr) -> Result<Option<HostEntry>>;
 }
 
