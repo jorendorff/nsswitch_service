@@ -98,7 +98,7 @@ impl<'a> HostEntry<'a> {
 
 /// Store the result of a `gethostbyname2_r()` lookup in the four
 /// out-parameters provided by the caller.
-pub fn handle_gethostbyname2_r(
+pub fn write_host_lookup_result(
     lookup_result: Result<Option<HostEntry>>,
     resultp: *mut hostent,
     buffer: *mut c_char,
@@ -125,6 +125,42 @@ pub fn handle_gethostbyname2_r(
 }
 
 #[inline]
+pub unsafe fn call_gethostbyname_r<T: Switcheroo>(
+    name: *const c_char,
+    result: *mut hostent,
+    buffer: *mut c_char,
+    buflen: usize,
+    errnop: *mut c_int,
+    h_errnop: *mut c_int,
+) -> NssStatus {
+    let lookup_result = T::gethostbyname_r(CStr::from_ptr(name));
+    write_host_lookup_result(lookup_result, result, buffer, buflen, errnop, h_errnop)
+}
+
+#[macro_export]
+macro_rules! nssglue_gethostbyname_r {
+    ($name:ident, $t:ty) => {
+        pub unsafe extern "C" fn $name(
+            name: *const $crate::macros::c_char,
+            result: *mut $crate::macros::hostent,
+            buffer: *mut $crate::macros::c_char,
+            buflen: usize,
+            errnop: *mut $crate::macros::c_int,
+            h_errnop: *mut $crate::macros::c_int,
+        ) -> $crate::macros::NssStatus {
+            $crate::macros::call_gethostbyname_r::<$t>(
+                name,
+                result,
+                buffer,
+                buflen,
+                errnop,
+                h_errnop
+            )
+        }
+    }
+}
+
+#[inline]
 pub unsafe fn call_gethostbyname2_r<T: Switcheroo>(
     name: *const c_char,
     af: c_int,
@@ -142,7 +178,7 @@ pub unsafe fn call_gethostbyname2_r<T: Switcheroo>(
             _ => return Error::invalid_args().report_with_host(errnop, h_errnop)
         },
     );
-    handle_gethostbyname2_r(lookup_result, result, buffer, buflen, errnop, h_errnop)
+    write_host_lookup_result(lookup_result, result, buffer, buflen, errnop, h_errnop)
 }
 
 /// This macro defines a function that implements `gethostbyname2_r` in a way
@@ -219,7 +255,7 @@ pub unsafe fn call_gethostbyaddr_r<T: Switcheroo>(
         _ => return Error::invalid_args().report_with_host(errnop, h_errnop)
     };
     let lookup_result = T::gethostbyaddr_r(&addr);
-    handle_gethostbyname2_r(lookup_result, result, buffer, buflen, errnop, h_errnop)
+    write_host_lookup_result(lookup_result, result, buffer, buflen, errnop, h_errnop)
 }
 
 #[macro_export]

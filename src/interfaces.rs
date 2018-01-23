@@ -26,9 +26,13 @@ pub struct HostEntry<'a> {
 }
 
 pub trait Switcheroo {
+    fn gethostbyname_r(name: &CStr) -> Result<Option<HostEntry>> {
+        Self::gethostbyname2_r(name, AddressFamily::Ipv4)
+    }
+
     /// Look up addresses for the hostname `name`.
     /// To intercept the `gethostbyname2_r` function, implement this method
-    /// and use the `nssglue_gethostbyname2_r!(libraryname, SwitcherooType);`
+    /// and use the `nssglue_gethostbyname2_r!(_nss_libraryname_gethostbyname2_r, SwitcherooType);`
     /// macro.
     ///
     /// This method must cope with the fact that C users can pass strings that
