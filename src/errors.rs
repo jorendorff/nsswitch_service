@@ -22,11 +22,21 @@ pub type Result<T> = result::Result<T, Error>;
 pub(crate) const NETDB_INTERNAL: c_int = -1;  // see errno
 const NETDB_SUCCESS: c_int = 0;    // no problem
 
-/// Constant 
-pub const HOST_NOT_FOUND: c_int = 1;   // Authoritative Answer Host not found
-pub const TRY_AGAIN: c_int = 2;        // Non-Authoritative not found, or SERVFAIL
-pub const NO_RECOVERY: c_int = 3;      // Non-Recoverable: FORMERR, REFUSED, NOTIMP
-pub const NO_DATA: c_int = 4;          // Valid name, no data for requested type
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HostError {
+    /// Authoritative Answer Host not found
+    HostNotFound = 1,
+
+    /// Non-Authoritative not found, or SERVFAIL
+    TryAgain = 2,
+
+    /// Non-Recoverable: FORMERR, REFUSED, NOTIMP
+    NoRecovery = 3,
+
+    /// Valid name, no data for requested type
+    NoData = 4,
+}
 
 macro_rules! abort {
     ($($message: expr),*) => {
@@ -54,8 +64,8 @@ impl Error {
         Error::new(status, errno, NETDB_INTERNAL)
     }
 
-    pub fn with_host(status: NssStatus, errno: c_int, h_errno: c_int) -> Error {
-        Error::new(status, errno, h_errno)
+    pub fn with_host(status: NssStatus, errno: c_int, h_errno: HostError) -> Error {
+        Error::new(status, errno, h_errno as c_int)
     }
 
     fn new(status: NssStatus, errno: c_int, h_errno: c_int) -> Error {
