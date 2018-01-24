@@ -42,11 +42,19 @@ pub trait NameService {
     /// aren't valid UTF-8. The easiest way is to bail out in that case:
     ///
     /// ```
+    /// # extern crate nsswitch_service;
+    /// # use nsswitch_service::*;
+    /// # use std::ffi::CStr;
+    /// # #[allow(dead_code)]
+    /// # fn my_gethostbyname2_r(name: &CStr) -> Result<Option<HostEntry>> {
     /// // Convert the C null-terminated string `name` to a Rust &str.
     /// let name_str = match name.to_str() {
     ///     Err(_) => return Ok(None),  // `name` isn't UTF-8, so bail out.
     ///     Ok(s) => s,
     /// };
+    /// #     Ok(None)
+    /// # }
+    /// # fn main() {}
     /// ```
     ///
     /// The `gethostbyname2_r` method must return one of these:
