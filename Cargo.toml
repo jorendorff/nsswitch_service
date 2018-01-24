@@ -1,10 +1,12 @@
 [package]
-name = "dev-tld-resolver"
+name = "nsswitch_service"
 version = "0.1.0"
 authors = ["Jason Orendorff <jason.orendorff@gmail.com>"]
 
 [dependencies]
 libc="*"
 
-[lib]
-crate-type = ["dylib"]
+[[example]]
+path = "examples/nss_loopback.rs"
+name = "nss_loopback"
+crate-type = ["cdylib"]
