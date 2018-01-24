@@ -140,6 +140,7 @@ pub unsafe fn call_gethostbyname_r<T: NameService>(
 #[macro_export]
 macro_rules! nssglue_gethostbyname_r {
     ($name:ident, $t:ty) => {
+        #[no_mangle]
         pub unsafe extern "C" fn $name(
             name: *const $crate::macros::c_char,
             result: *mut $crate::macros::hostent,
@@ -204,6 +205,7 @@ pub unsafe fn call_gethostbyname2_r<T: NameService>(
 #[macro_export]
 macro_rules! nssglue_gethostbyname2_r {
     ($name:ident, $t:ty) => {
+        #[no_mangle]
         pub unsafe extern "C" fn $name(
             name: *const $crate::macros::c_char,
             af: $crate::macros::c_int,
@@ -261,6 +263,7 @@ pub unsafe fn call_gethostbyaddr_r<T: NameService>(
 #[macro_export]
 macro_rules! nssglue_gethostbyaddr_r {
     ($name:ident, $t:ty) => {
+        #[no_mangle]
         pub unsafe extern "C" fn $name(
             addr: *const $crate::macros::c_void,
             len: $crate::macros::c_int,
