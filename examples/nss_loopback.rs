@@ -7,13 +7,13 @@
 #[macro_use]
 extern crate nsswitch_service;
 
-use nsswitch_service::{AddressFamily, Database, HostEntry, HostAddressList, Result};
+use nsswitch_service::{AddressFamily, NameService, HostEntry, HostAddressList, Result};
 use std::ffi::CStr;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 struct LoopbackService;
 
-impl Database for LoopbackService {
+impl NameService for LoopbackService {
     fn gethostbyname2_r(name: &CStr, af: AddressFamily) -> Result<Option<HostEntry>> {
         use std::borrow::Cow;
 

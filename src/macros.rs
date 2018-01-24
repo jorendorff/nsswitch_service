@@ -1,7 +1,7 @@
 use alloc::BumpAllocator;
 use errors::{Error, Result, NETDB_INTERNAL};
 pub use errors::NssStatus;
-use interfaces::{AddressFamily, HostEntry, HostAddressList, Database};
+use interfaces::{AddressFamily, HostEntry, HostAddressList, NameService};
 use libc::{AF_INET, AF_INET6, in_addr_t, in6_addr };
 pub use libc::{c_char, c_int, c_void, hostent};
 use std::{iter, mem, ptr};
@@ -125,7 +125,7 @@ pub fn write_host_lookup_result(
 }
 
 #[inline]
-pub unsafe fn call_gethostbyname_r<T: Database>(
+pub unsafe fn call_gethostbyname_r<T: NameService>(
     name: *const c_char,
     result: *mut hostent,
     buffer: *mut c_char,
@@ -161,7 +161,7 @@ macro_rules! nssglue_gethostbyname_r {
 }
 
 #[inline]
-pub unsafe fn call_gethostbyname2_r<T: Database>(
+pub unsafe fn call_gethostbyname2_r<T: NameService>(
     name: *const c_char,
     af: c_int,
     result: *mut hostent,
@@ -196,7 +196,7 @@ pub unsafe fn call_gethostbyname2_r<T: Database>(
 ///     and calls it.
 ///
 /// *   The macro-defined function is a minimal wrapper that delegates all the
-///     actual work to the `gethostbyname2_r` method of `$t`, a `Database`
+///     actual work to the `gethostbyname2_r` method of `$t`, a `NameService`
 ///     implementation that you provide.
 ///
 /// `$name` must be of the form `_nss_YOURLIBNAME_gethostbyname2_r`,
@@ -227,7 +227,7 @@ macro_rules! nssglue_gethostbyname2_r {
 }
 
 #[inline]
-pub unsafe fn call_gethostbyaddr_r<T: Database>(
+pub unsafe fn call_gethostbyaddr_r<T: NameService>(
     addr: *const c_void,
     len: c_int,
     af: c_int,

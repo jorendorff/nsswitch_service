@@ -25,15 +25,18 @@ pub struct HostEntry<'a> {
     pub addr_list: HostAddressList,
 }
 
-pub trait Database {
+pub trait NameService {
     fn gethostbyname_r(name: &CStr) -> Result<Option<HostEntry>> {
         Self::gethostbyname2_r(name, AddressFamily::Ipv4)
     }
 
     /// Look up addresses for the hostname `name`.
     /// To intercept the `gethostbyname2_r` function, implement this method
-    /// and use the `nssglue_gethostbyname2_r!(_nss_libraryname_gethostbyname2_r, DatabaseType);`
-    /// macro.
+    /// and use the `nssglue` macro:
+    ///
+    /// ```ignore
+    /// nssglue_gethostbyname2_r!(_nss_mylibraryname_gethostbyname2_r, MyNameService);
+    /// ```
     ///
     /// This method must cope with the fact that C users can pass strings that
     /// aren't valid UTF-8. The easiest way is to bail out in that case:
