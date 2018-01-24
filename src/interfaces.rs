@@ -5,6 +5,7 @@ use std::ffi::CStr;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use errors::Result;
 
+#[derive(Debug)]
 pub enum AddressFamily {
     Ipv4,
     Ipv6
@@ -12,6 +13,7 @@ pub enum AddressFamily {
 
 /// A list of addresses that are of the same address family (either all IPv4 or
 /// all IPv6).
+#[derive(Debug)]
 pub enum HostAddressList {
     V4(Vec<Ipv4Addr>),
     V6(Vec<Ipv6Addr>),
@@ -19,6 +21,7 @@ pub enum HostAddressList {
 
 /// Information about a host, the type of record returned by `gethostbyname`
 /// and friends.
+#[derive(Debug)]
 pub struct HostEntry<'a> {
     pub name: Cow<'a, CStr>,
     pub aliases: Vec<Cow<'a, CStr>>,
