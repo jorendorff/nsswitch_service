@@ -10,12 +10,12 @@ pub mod interfaces;
 use std::ffi::CStr;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use interfaces::{AddressFamily, HostAddressList, HostEntry, Switcheroo};
+use interfaces::{AddressFamily, HostAddressList, HostEntry, Database};
 use errors::Result;
 
 struct ExampleResolver;
 
-impl Switcheroo for ExampleResolver {
+impl Database for ExampleResolver {
     fn gethostbyname2_r(name: &CStr, af: AddressFamily) -> Result<Option<HostEntry>> {
         use std::borrow::Cow;
 
@@ -30,7 +30,7 @@ impl Switcheroo for ExampleResolver {
             Some(index) => &name_str[index + 1..],
         };
 
-        let domains = std::env::var("DEV_TLD_DOMAINS").unwrap_or_else(|_| "dev".to_string());
+        let domains = std::env::var("LOOPBACK_DOMAINS").unwrap_or_else(|_| "test".to_string());
         for domain in domains.split(',') {
             if name_tld.eq_ignore_ascii_case(domain) {
                 return Ok(Some(HostEntry {
