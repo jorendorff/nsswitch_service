@@ -2,6 +2,7 @@ use libc::c_char;
 use errors::{Error, Result};
 use std::{mem, ptr, slice};
 use std::ffi::CStr;
+use std::marker::PhantomData;
 
 /// A `BumpAllocator` is a value that can "allocate" smaller pieces from a
 /// slab of memory provided by the user. Call `bump_allocator.allocate<T>(value)`
@@ -9,30 +10,42 @@ use std::ffi::CStr;
 ///
 /// Once allocated, values in the BumpAllocator are never dropped.
 ///
-pub struct BumpAllocator {
+pub struct BumpAllocator<'s> {
     /// The address of the first unused byte in the buffer.
     point: usize,
 
     /// The address one byte past the end of the buffer.
     stop: usize,
+
+    /// This field tells the compiler that a BumpAllocator has an exclusive
+    /// reference to a buffer; from this, the compiler knows that the
+    /// allocator shouldn't outlive the lifetime `'s`.
+    buffer: PhantomData<&'s mut [u8]>,
 }
 
 fn out_of_room<T>() -> Result<T> {
     Err(Error::buffer_too_small())
 }
 
-impl BumpAllocator {
+impl<'s> BumpAllocator<'s> {
+    pub fn new(buffer: &'s mut [u8]) -> BumpAllocator<'s> {
+        BumpAllocator {
+            point: buffer.as_ptr() as usize,
+            stop: buffer.as_ptr() as usize + buffer.len(),
+            buffer: PhantomData
+        }
+    }
+
     /// Create a bump allocator that writes to the given fixed-size `buffer`.
     ///
     /// `buffer` must point to `buflen` bytes of uninitialized memory that the `BumpAllocator`
     /// can use for its whole lifetime, even across moves.
-    pub unsafe fn new(buffer: *mut c_char, buflen: usize) -> Result<BumpAllocator> {
+    pub unsafe fn from_ptr(buffer: *mut c_char, buflen: usize) -> Result<BumpAllocator<'s>> {
         let point = buffer as usize;
         if buflen > isize::max_value() as usize || buflen > usize::max_value() - point {
             return Err(Error::invalid_args());
         }
-        let stop = buffer.offset(buflen as isize) as usize;
-        Ok(BumpAllocator { point, stop })
+        Ok(BumpAllocator::new(slice::from_raw_parts_mut(buffer as *mut u8, buflen)))
     }
 
     /// If `self.point` is not properly aligned to hold a value of type `T`,
@@ -60,7 +73,7 @@ impl BumpAllocator {
         if wrapped {
             return out_of_room();
         }
-        let aligned = padded % alignment;
+        let aligned = padded - padded % alignment;
         if aligned > self.stop {
             return out_of_room();
         }
@@ -131,5 +144,57 @@ impl BumpAllocator {
         unsafe {
             Ok(CStr::from_ptr(dst))
         }
+    }
+}
+
+#[test]
+fn test_alloc() {
+    let mut buf = [0_u8; 16];
+
+    // Find a slice of buf that is aligned to an 8-byte boundary.
+    let addr = buf.as_ptr() as usize;
+    let offset = (8 - addr % 8) % 8;
+    assert!((addr + offset) % 8 == 0);
+
+    {
+        let mut a = BumpAllocator::new(&mut buf[offset..offset + 8]);
+
+        {
+            let r: &u32 = a.allocate(0x12345678_u32).unwrap();
+            assert_eq!(*r, 0x12345678u32);
+            assert_eq!((r as *const u32 as usize) % mem::align_of::<u32>(), 0);
+        }
+
+        assert_eq!(*a.allocate(0xfe_u8).unwrap(), 0xfe_u8);
+
+        {
+            let r: &u16 = a.allocate(0xabcd_u16).unwrap();
+            assert_eq!(*r, 0xabcd_u16);
+            assert_eq!((r as *const u16 as usize) % mem::align_of::<u16>(), 0);
+        }
+
+        assert!(a.allocate(0xef_u8).is_err());
+        assert!(a.allocate(0_u8).is_err());
+    }
+    assert_eq!((buf[offset + 4], offset), (0xfe, 0));
+}
+
+#[test]
+fn test_copy_c_str() {
+    use std::ffi::CString;
+
+    let mut buf = [0_u8; 100];
+    let mut a = BumpAllocator::new(&mut buf);
+
+    {
+        let src1 = CString::new("hello world").unwrap();
+        let copy1 = a.copy_c_str(&src1).unwrap();
+        assert_eq!(copy1.to_str().unwrap(), "hello world");
+    }
+
+    {
+        let src2 = CString::new("Jello squirreled").unwrap();
+        let copy2 = a.copy_c_str(&src2).unwrap();
+        assert_eq!(copy2.to_str().unwrap(), "Jello squirreled");
     }
 }

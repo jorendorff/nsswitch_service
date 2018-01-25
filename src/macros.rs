@@ -48,7 +48,7 @@ impl<'a> HostEntry<'a> {
         const INADDRSZ: c_int = 4;
         const IN6ADDRSZ: c_int = 16;
 
-        let mut allocator = unsafe { BumpAllocator::new(buffer, buflen) }?;
+        let mut allocator = unsafe { BumpAllocator::from_ptr(buffer, buflen) }?;
 
         let h_name = allocator.copy_c_str(&self.name)?.as_ptr() as *mut c_char;
         let h_aliases =
