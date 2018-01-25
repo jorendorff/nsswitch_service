@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 ///
 /// Once allocated, values in the BumpAllocator are never dropped.
 ///
-pub struct BumpAllocator<'s> {
+pub struct BumpAllocator<'buf> {
     /// The address of the first unused byte in the buffer.
     point: usize,
 
@@ -19,16 +19,16 @@ pub struct BumpAllocator<'s> {
 
     /// This field tells the compiler that a BumpAllocator has an exclusive
     /// reference to a buffer; from this, the compiler knows that the
-    /// allocator shouldn't outlive the lifetime `'s`.
-    buffer: PhantomData<&'s mut [u8]>,
+    /// allocator shouldn't outlive the lifetime `'buf`.
+    buffer: PhantomData<&'buf mut [u8]>,
 }
 
 fn out_of_room<T>() -> Result<T> {
     Err(Error::buffer_too_small())
 }
 
-impl<'s> BumpAllocator<'s> {
-    pub fn new(buffer: &'s mut [u8]) -> BumpAllocator<'s> {
+impl<'buf> BumpAllocator<'buf> {
+    pub fn new(buffer: &'buf mut [u8]) -> BumpAllocator<'buf> {
         BumpAllocator {
             point: buffer.as_ptr() as usize,
             stop: buffer.as_ptr() as usize + buffer.len(),
@@ -38,9 +38,18 @@ impl<'s> BumpAllocator<'s> {
 
     /// Create a bump allocator that writes to the given fixed-size `buffer`.
     ///
-    /// `buffer` must point to `buflen` bytes of uninitialized memory that the `BumpAllocator`
-    /// can use for its whole lifetime, even across moves.
-    pub unsafe fn from_ptr(buffer: *mut c_char, buflen: usize) -> Result<BumpAllocator<'s>> {
+    /// # Safety
+    ///
+    /// `buffer` must point to `buflen` bytes of uninitialized memory that the
+    /// `BumpAllocator` can use for its whole lifetime, even across moves.
+    ///
+    /// The caller must ensure that neither the `BumpAllocator` nor any
+    /// reference into it outlives the buffer. **Rust will not help you enforce
+    /// this rule.** Rust has no way of knowing how long the buffer will remain
+    /// valid. Consequently it's easy to get Rust to infer an unsafe lifetime
+    /// for `'buf` (such that the allocator outlives the buffer), just by
+    /// accident.
+    pub unsafe fn from_ptr(buffer: *mut c_char, buflen: usize) -> Result<BumpAllocator<'buf>> {
         let point = buffer as usize;
         if buflen > isize::max_value() as usize || buflen > usize::max_value() - point {
             return Err(Error::invalid_args());
@@ -97,7 +106,7 @@ impl<'s> BumpAllocator<'s> {
     /// Move the given `value` into some of this allocator's free space and
     /// return the address. This returns an error if there is not enough room
     /// to store `value` with the proper alignment.
-    pub fn allocate<T>(&mut self, value: T) -> Result<&mut T> {
+    pub fn allocate<'a, T>(&'a mut self, value: T) -> Result<&'buf mut T> {
         self.align_to::<T>()?;
         let p = self.take(mem::size_of::<T>())? as *mut T;
         unsafe {
@@ -108,7 +117,10 @@ impl<'s> BumpAllocator<'s> {
 
     /// Iterate over the given collection, storing its items in a flat array in
     /// the buffer. Returns a pointer to the first element of the array.
-    pub fn allocate_array<C: IntoIterator>(&mut self, collection: C) -> Result<&mut [C::Item]> {
+    pub fn allocate_array<'a, C: IntoIterator>(
+        &'a mut self,
+        collection: C
+    ) -> Result<&'buf mut [C::Item]> {
         self.align_to::<C::Item>()?;
         let array_ptr = self.point as *mut C::Item;
         let mut n = 0_usize;
@@ -129,10 +141,10 @@ impl<'s> BumpAllocator<'s> {
     /// address of the copy. This returns an error if there is not enough room
     /// left in the buffer for the whole string, including the trailing NUL
     /// character.
-    pub fn copy_c_str<'allocator, 'source>(
-        &'allocator mut self,
-        str: &'source CStr,
-    ) -> Result<&'allocator CStr> {
+    pub fn copy_c_str<'a, 'src>(
+        &'a mut self,
+        str: &'src CStr,
+    ) -> Result<&'buf CStr> {
         let bytes = str.to_bytes_with_nul();
         let src = bytes.as_ptr();
         let nbytes = bytes.len();
@@ -159,19 +171,15 @@ fn test_alloc() {
     {
         let mut a = BumpAllocator::new(&mut buf[offset..offset + 8]);
 
-        {
-            let r: &u32 = a.allocate(0x12345678_u32).unwrap();
-            assert_eq!(*r, 0x12345678u32);
-            assert_eq!((r as *const u32 as usize) % mem::align_of::<u32>(), 0);
-        }
+        let r = a.allocate(0x12345678_u32).unwrap();
+        assert_eq!(*r, 0x12345678u32);
+        assert_eq!((r as *mut u32 as usize) % mem::align_of::<u32>(), 0);
 
         assert_eq!(*a.allocate(0xfe_u8).unwrap(), 0xfe_u8);
 
-        {
-            let r: &u16 = a.allocate(0xabcd_u16).unwrap();
-            assert_eq!(*r, 0xabcd_u16);
-            assert_eq!((r as *const u16 as usize) % mem::align_of::<u16>(), 0);
-        }
+        let r: &mut u16 = a.allocate(0xabcd_u16).unwrap();
+        assert_eq!(*r, 0xabcd_u16);
+        assert_eq!((r as *mut u16 as usize) % mem::align_of::<u16>(), 0);
 
         assert!(a.allocate(0xef_u8).is_err());
         assert!(a.allocate(0_u8).is_err());
@@ -186,15 +194,13 @@ fn test_copy_c_str() {
     let mut buf = [0_u8; 100];
     let mut a = BumpAllocator::new(&mut buf);
 
-    {
-        let src1 = CString::new("hello world").unwrap();
-        let copy1 = a.copy_c_str(&src1).unwrap();
-        assert_eq!(copy1.to_str().unwrap(), "hello world");
-    }
+    let src1 = CString::new("hello world").unwrap();
+    let copy1 = a.copy_c_str(&src1).unwrap();
+    assert_eq!(copy1.to_str().unwrap(), "hello world");
 
-    {
-        let src2 = CString::new("Jello squirreled").unwrap();
-        let copy2 = a.copy_c_str(&src2).unwrap();
-        assert_eq!(copy2.to_str().unwrap(), "Jello squirreled");
-    }
+    let src2 = CString::new("Jello squirreled").unwrap();
+    let copy2 = a.copy_c_str(&src2).unwrap();
+    assert_eq!(copy2.to_str().unwrap(), "Jello squirreled");
+
+    assert_eq!(copy1.to_str().unwrap(), "hello world");
 }
