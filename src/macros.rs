@@ -68,11 +68,15 @@ impl<'a> HostEntry<'a> {
         let (h_addrtype, h_length, h_addr_list) =
             match self.addr_list {
                 HostAddressList::V4(ref addrs) => {
-                    let arrayp: &mut [*mut c_char] = allocator.allocate_array(
-                        addrs.iter()
-                            .map(|ip| to_in_addr_t(*ip) as *mut c_char)
-                            .chain(iter::once(ptr::null_mut())),
-                    )?;
+                    // This could be optimized to eliminate the temporary Vec.
+                    let addr_list: Result<Vec<*mut c_char>> = addrs.iter()
+                        .map(|ip| {
+                            allocator.allocate(to_in_addr_t(*ip).to_be())
+                                .map(|addr_ref: &mut in_addr_t| addr_ref as *mut in_addr_t as *mut c_char)
+                        })
+                        .chain(iter::once(Ok(ptr::null_mut())))
+                        .collect();
+                    let arrayp: &mut [*mut c_char] = allocator.allocate_array(addr_list?)?;
                     (AF_INET, INADDRSZ, relax_array_ptr(arrayp))
                 }
                 HostAddressList::V6(ref addrs) => {
