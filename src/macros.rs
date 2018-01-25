@@ -107,7 +107,9 @@ pub fn write_host_lookup_result(
     h_errnop: *mut c_int,
 ) -> NssStatus {
     match lookup_result {
-        Err(err) => unsafe { err.report_with_host(errnop, h_errnop) },
+        Err(err) => unsafe {
+            err.report_with_host(errnop, h_errnop)
+        },
 
         Ok(None) => unsafe {
             Error::with_errno(NssStatus::NotFound, ENOENT)
