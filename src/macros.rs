@@ -3,7 +3,7 @@ use errors::{Error, Result};
 pub use errors::NssStatus;
 use interfaces::{AddressFamily, HostEntry, HostAddressList, NameService};
 use libc::{AF_INET, AF_INET6, in_addr_t, in6_addr };
-pub use libc::{c_char, c_int, c_void, hostent};
+pub use libc::{c_char, c_int, c_void, ENOENT, hostent};
 use std::{iter, mem, ptr};
 use std::ffi::CStr;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -109,7 +109,10 @@ pub fn write_host_lookup_result(
     match lookup_result {
         Err(err) => unsafe { err.report_with_host(errnop, h_errnop) },
 
-        Ok(None) => NssStatus::NotFound,
+        Ok(None) => unsafe {
+            Error::with_errno(NssStatus::NotFound, ENOENT)
+                .report_with_host(errnop, h_errnop)
+        }
 
         Ok(Some(host)) => unsafe {
             match host.write_to(resultp, buffer, buflen) {
