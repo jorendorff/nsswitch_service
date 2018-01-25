@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 /// to move one value of type T into the buffer.
 ///
 /// Once allocated, values in the BumpAllocator are never dropped.
+/// This can cause memory leaks.
 ///
 pub struct BumpAllocator<'buf> {
     /// The address of the first unused byte in the buffer.
@@ -28,6 +29,7 @@ fn out_of_room<T>() -> Result<T> {
 }
 
 impl<'buf> BumpAllocator<'buf> {
+    /// Return a new allocator that carves slices out of the given `buffer`.
     pub fn new(buffer: &'buf mut [u8]) -> BumpAllocator<'buf> {
         BumpAllocator {
             point: buffer.as_ptr() as usize,
@@ -103,9 +105,10 @@ impl<'buf> BumpAllocator<'buf> {
         Ok(p)
     }
 
-    /// Move the given `value` into some of this allocator's free space and
-    /// return the address. This returns an error if there is not enough room
-    /// to store `value` with the proper alignment.
+    /// Move the given `value` into this allocator's buffer and return a
+    /// reference to its new location. This returns an error if there is not
+    /// enough room to store `value` with the proper alignment.
+    #[allow(dead_code)]
     pub fn allocate<'a, T>(&'a mut self, value: T) -> Result<&'buf mut T> {
         self.align_to::<T>()?;
         let p = self.take(mem::size_of::<T>())? as *mut T;
