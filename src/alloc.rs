@@ -4,12 +4,16 @@ use std::{mem, ptr, slice};
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
-/// A `BumpAllocator` is a value that can "allocate" smaller pieces from a
-/// slab of memory provided by the user. Call `bump_allocator.allocate<T>(value)`
-/// to move one value of type T into the buffer.
+/// A dead simple memory manager that manages a single contiguous buffer
+/// provided by the user. Call `bump_allocator.allocate(value)` to move a value
+/// into the buffer.
 ///
-/// Once allocated, values in the BumpAllocator are never dropped.
-/// This can cause memory leaks.
+/// The `BumpAllocator` fills up the buffer as you allocate values, in a single
+/// left-to-right pass. There is no `free()` operation.
+///
+/// Once allocated, values in the BumpAllocator are never dropped. So if you
+/// move a non-`Copy` value like a `Vec` or `String` into the buffer, it will
+/// never get cleaned up: a memory leak.
 ///
 pub struct BumpAllocator<'buf> {
     /// The address of the first unused byte in the buffer.
