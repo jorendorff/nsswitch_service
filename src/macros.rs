@@ -45,9 +45,6 @@ impl<'a> HostEntry<'a> {
         buffer: *mut c_char,
         buflen: usize
     ) -> Result<()> {
-        const INADDRSZ: c_int = 4;
-        const IN6ADDRSZ: c_int = 16;
-
         let mut allocator = unsafe { BumpAllocator::from_ptr(buffer, buflen) }?;
 
         let h_name = allocator.copy_c_str(&self.name)?.as_ptr() as *mut c_char;
@@ -68,28 +65,40 @@ impl<'a> HostEntry<'a> {
         let (h_addrtype, h_length, h_addr_list) =
             match self.addr_list {
                 HostAddressList::V4(ref addrs) => {
-                    // This could be optimized to eliminate the temporary Vec.
-                    let addr_list: Result<Vec<*mut c_char>> = addrs.iter()
-                        .map(|ip| {
-                            allocator.allocate(to_in_addr_t(*ip).to_be())
-                                .map(|addr_ref: &mut in_addr_t| addr_ref as *mut in_addr_t as *mut c_char)
-                        })
-                        .chain(iter::once(Ok(ptr::null_mut())))
-                        .collect();
-                    let arrayp: &mut [*mut c_char] = allocator.allocate_array(addr_list?)?;
-                    (AF_INET, INADDRSZ, relax_array_ptr(arrayp))
+                    const INADDRSZ: c_int = 4;
+                    debug_assert_eq!(INADDRSZ, mem::size_of::<in_addr_t>() as i32);
+
+                    // First, store all the addresses in the user's buffer.
+                    // This API uses network byte order, hence the `.to_be()`.
+                    let buf_addrs: &mut [in_addr_t] = allocator.allocate_array(
+                        addrs.iter()
+                            .map(|ip| to_in_addr_t(*ip).to_be())
+                    )?;
+
+                    // Make a null-terminated array of pointers to the elements of buf_addrs.
+                    // Cast these pointers to `*mut c_char` because C doesn't have generics.
+                    let addr_ptrs: &mut [*mut c_char] = allocator.allocate_array(
+                        buf_addrs.iter_mut()
+                            .map(|ip_ref| ip_ref as *mut in_addr_t as *mut c_char)
+                            .chain(iter::once(ptr::null_mut()))
+                    )?;
+                    (AF_INET, INADDRSZ, relax_array_ptr(addr_ptrs))
                 }
                 HostAddressList::V6(ref addrs) => {
-                    // This could be optimized to eliminate the temporary Vec.
-                    let addr_list: Result<Vec<*mut c_char>> = addrs.iter()
-                        .map(|ipv6| {
-                            allocator.allocate(to_in6_addr(*ipv6))
-                                .map(|addr_ref: &mut in6_addr| addr_ref as *mut in6_addr as *mut c_char)
-                        })
-                        .chain(iter::once(Ok(ptr::null_mut())))
-                        .collect();
-                    let arrayp: &mut [*mut c_char] = allocator.allocate_array(addr_list?)?;
-                    (AF_INET6, IN6ADDRSZ, relax_array_ptr(arrayp))
+                    // See the V4 case for an explanation.
+                    const IN6ADDRSZ: c_int = 16;
+                    debug_assert_eq!(IN6ADDRSZ, mem::size_of::<in6_addr>() as i32);
+
+                    let buf_addrs: &mut [in6_addr] = allocator.allocate_array(
+                        addrs.iter().map(|ipv6| to_in6_addr(*ipv6))
+                    )?;
+
+                    let addr_ptrs: &mut [*mut c_char] = allocator.allocate_array(
+                        buf_addrs.iter_mut()
+                            .map(|ipv6_ref| ipv6_ref as *mut in6_addr as *mut c_char)
+                            .chain(iter::once(ptr::null_mut()))
+                    )?;
+                    (AF_INET6, IN6ADDRSZ, relax_array_ptr(addr_ptrs))
                 }
             };
 
